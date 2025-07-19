@@ -19,6 +19,9 @@ web = ["dioxus/web"]
 desktop = ["dioxus/desktop"]
 mobile = ["dioxus/mobile"]
 
+[web.app]
+base_path = "bingo"
+
 [profile]
 
 [profile.wasm-dev]
