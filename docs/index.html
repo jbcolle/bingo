@@ -5,14 +5,14 @@
     <meta content="text/html;charset=utf-8" http-equiv="Content-Type" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta charset="UTF-8" />
-  <link rel="preload" as="script" href="/assets/bingo-3e85310d709dd9d3.js" crossorigin><link rel="preload" as="fetch" type="application/wasm" href="/assets/bingo_bg-fc27b58b44aae61c.wasm" crossorigin></head>
+  <link rel="preload" as="script" href="/docs/assets/bingo-3e85310d709dd9d3.js" crossorigin><link rel="preload" as="fetch" type="application/wasm" href="/docs/assets/bingo_bg-80a039836143c896.wasm" crossorigin></head>
   <body>
     <div id="main"></div>
   <script>
             // We can't use a module script here because we need to start the script immediately when streaming
             import("/docs/assets/bingo-3e85310d709dd9d3.js").then(
                 ({ default: init }) => {
-                init("/./assets/bingo_bg-fc27b58b44aae61c.wasm").then((wasm) => {
+                init("/./assets/bingo_bg-80a039836143c896.wasm").then((wasm) => {
                     if (wasm.__wbindgen_start == undefined) {
                     wasm.main();
                     }
