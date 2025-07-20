@@ -10,7 +10,7 @@
     <div id="main"></div>
   <script>
             // We can't use a module script here because we need to start the script immediately when streaming
-            import("/./assets/bingo-3e85310d709dd9d3.js").then(
+            import("/assets/bingo-3e85310d709dd9d3.js").then(
                 ({ default: init }) => {
                 init("/./assets/bingo_bg-fc27b58b44aae61c.wasm").then((wasm) => {
                     if (wasm.__wbindgen_start == undefined) {

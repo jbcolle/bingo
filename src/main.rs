@@ -87,19 +87,19 @@ pub fn Bingo() -> Element {
     rsx! {
         div {
             id: "bingo",
-            // div {
-            //     id: "bingo-grid",
-            //
-            //     for row in 0..GRID_SIZE {
-            //         for col in 0..GRID_SIZE {
-            //             BingoCell {
-            //                 bingo_game: bingo,
-            //                 row,
-            //                 col,
-            //             }
-            //         }
-            //     }
-            // }
+            div {
+                id: "bingo-grid",
+            
+                for row in 0..GRID_SIZE {
+                    for col in 0..GRID_SIZE {
+                        BingoCell {
+                            bingo_game: bingo,
+                            row,
+                            col,
+                        }
+                    }
+                }
+            }
         }
     }
 }
