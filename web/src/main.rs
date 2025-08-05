@@ -1,14 +1,23 @@
-use std::collections::HashMap;
-use anyhow::bail;
-use dioxus::logger::tracing::{error, info, warn};
+use dioxus::logger::tracing::{error, info};
 use dioxus::prelude::*;
-use serde::Deserialize;
+use dioxus_fullstack::prelude::*;
+use api::bingo::BingoGame;
 
 const MAIN_CSS: Asset = asset!("/assets/main.css");
 const GRID_SIZE: usize = 8;
 
 fn main() {
+    #[cfg(feature = "web")]
     dioxus::launch(App);
+
+    #[cfg(feature = "server")]
+    {
+        tokio::runtime::Runtime::new()
+            .unwrap()
+            .block_on(async move {
+                launch_server(App).await;
+            });
+    }
 }
 
 #[component]
@@ -16,84 +25,79 @@ fn App() -> Element {
     rsx! {
         document::Link { rel: "stylesheet", href: MAIN_CSS }
         Bingo {}
-
     }
 }
 
-#[derive(Clone, PartialEq, Debug, Deserialize)]
-struct BingoItem {
-    name: String,
-    done: bool
+#[server]
+async fn get_bingo() -> Result<BingoGame, ServerFnError> {
+    let json_data = include_str!("../assets/bingo-gf-2025.json");
+    Ok(BingoGame::new(
+        json_data,
+        8,
+    )?)
 }
 
-#[derive(Clone, PartialEq, Debug)]
-struct BingoGame {
-    items: Vec<BingoItem>,
-    grid_size: usize
-}
+#[cfg(feature = "server")]
+async fn launch_server(component: fn() -> Element) {
+    use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 
-impl BingoGame {
-    fn new(json_data: &str, grid_size: usize) -> Result<Self, serde_json::Error> {
-        let data: HashMap<String, bool> = serde_json::from_str(json_data)?;
-
-        let mut items: Vec<BingoItem> = data
-            .iter()
-            .map(|(text, completed)| BingoItem {
-                name: text.to_owned(),
-                done: *completed,
-            })
-            .collect();
-
-        items.truncate((grid_size * grid_size) as usize);
-
-        Ok(BingoGame {
-            items,
-            grid_size
-        })
-    }
-
-    fn get_item(&self, row: usize, col: usize) -> Option<&BingoItem> {
-        let index = (row * self.grid_size) + col;
-        self.items.get(index)
-    }
-
-    fn set_item_completed(&mut self, row: usize, col: usize, completed: bool) -> anyhow::Result<()> {
-        let index = (row * self.grid_size) + col;
-        let Some(item) = self.items.get_mut(index) else {
-            bail!("Could not get bingo item at row {row} and col {col}")
-        };
-        item.done = completed;
-        Ok(())
-    }
-
-    fn write_to_json(&self) -> String {
-        let mut data: HashMap<String, bool> = HashMap::new();
-        for item in &self.items {
-            data.insert(item.name.clone(), item.done);
-        }
-        serde_json::to_string(&data).unwrap()
-
-    }
+    let ip =
+        dioxus::cli_config::server_ip().unwrap_or_else(|| IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)));
+    let port = dioxus::cli_config::server_port().unwrap_or(8080);
+    let address = SocketAddr::new(ip, port);
+    let listener = tokio::net::TcpListener::bind(address).await.unwrap();
+    let router = axum::Router::new()
+        .serve_dioxus_application(ServeConfigBuilder::default(), App)
+        .into_make_service();
+    axum::serve(listener, router).await.unwrap();
 }
 
 #[component]
 pub fn Bingo() -> Element {
 
-    let bingo = use_signal(|| {
-        let json_data = include_str!("../assets/bingo-gf-2025.json");
-        BingoGame::new(json_data, GRID_SIZE).expect("Could not load bingo")
+    let bingo = use_resource(|| async move {
+       get_bingo()
+           .await
     });
 
     rsx! {
+        match &*bingo.read_unchecked() {
+            Some(Ok(bingo_game)) => rsx! {
+                BingoGameDiv {
+                    bingo_game: bingo_game.clone()
+                }
+            },
+            Some(Err(err)) => rsx! {
+                p {
+                    "Could not load bingo: {err}"
+                }
+            },
+            None => rsx! {
+                p {
+                    "Loading..."
+                }
+            }
+        }
+
+    }
+}
+
+#[component]
+fn BingoGameDiv(bingo_game: BingoGame) -> Element {
+    let bingo_signal = use_signal(|| {
+        bingo_game
+    });
+
+    rsx!(
         div {
             id: "bingo",
             div {
                 id: "bingo-grid",
-            
+
                 for row in 0..GRID_SIZE {
                     for col in 0..GRID_SIZE {
                         BingoCell {
-                            bingo_game: bingo,
+                            bingo_game: bingo_signal,
                             row,
                             col,
                         }
@@ -101,7 +105,7 @@ pub fn Bingo() -> Element {
                 }
             }
         }
-    }
+    )
 }
 
 #[component]
@@ -123,7 +127,7 @@ fn BingoCell(bingo_game: Signal<BingoGame>, row: usize, col: usize) -> Element {
                     let timer = gloo::timers::callback::Timeout::new(800, move || {
                         info!("Long press detected - uncompleting cell at ({}, {})", row, col);
                         long_press_triggered.set(true);
-                        bingo_game.with_mut(|game| {
+                        bingo_game.with_mut(|ref mut game| {
                             if let Err(e) = game.set_item_completed(row, col, false) {
                                 error!("Couldn't uncomplete item: {}", e);
                             }
@@ -141,7 +145,7 @@ fn BingoCell(bingo_game: Signal<BingoGame>, row: usize, col: usize) -> Element {
                 // Only process regular click if long press wasn't triggered
                 if !long_press_triggered() && !item.done {
                     info!("Clicked cell at ({}, {})", row, col);
-                    bingo_game.with_mut(|game| {
+                    bingo_game.with_mut(|ref mut game| {
                         if let Err(e) = game.set_item_completed(row, col, true) {
                             error!("Couldn't complete item: {}", e);
                         }
@@ -166,7 +170,7 @@ fn BingoCell(bingo_game: Signal<BingoGame>, row: usize, col: usize) -> Element {
                     let timer = gloo::timers::callback::Timeout::new(800, move || {
                         info!("Long press detected (touch) - uncompleting cell at ({}, {})", row, col);
                         long_press_triggered.set(true);
-                        bingo_game.with_mut(|game| {
+                        bingo_game.with_mut(|ref mut game| {
                             if let Err(e) = game.set_item_completed(row, col, false) {
                                 error!("Couldn't uncomplete item: {}", e);
                             }
@@ -184,7 +188,7 @@ fn BingoCell(bingo_game: Signal<BingoGame>, row: usize, col: usize) -> Element {
                 // Only process regular tap if long press wasn't triggered
                 if !long_press_triggered() && !item.done {
                     info!("Tapped cell at ({}, {})", row, col);
-                    bingo_game.with_mut(|game| {
+                    bingo_game.with_mut(|ref mut game| {
                         if let Err(e) = game.set_item_completed(row, col, true) {
                             error!("Couldn't complete item: {}", e);
                         }

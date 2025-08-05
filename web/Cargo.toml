@@ -1,0 +1,21 @@
+[package]
+name = "web"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+dioxus = { workspace = true, features = ["fullstack"] }
+dioxus-fullstack = "0.6.3"
+serde_json = {workspace = true}
+anyhow = {workspace = true}
+gloo = {workspace = true, features = ["timers", "net"]}
+serde = { workspace = true, features = ["derive"] }
+reqwest = { workspace = true, features = ["json"] }
+api = {workspace = true}
+tokio = { version = "1.47.1", features = ["full"], optional = true}
+axum = { version = "0.7.9", optional = true}
+
+[features]
+default = []
+web = ["dioxus/web"]
+server = ["dioxus/server", "dep:axum", "dep:tokio"]
